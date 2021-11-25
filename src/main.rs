@@ -61,23 +61,19 @@ impl PlayerCamera {
         );
 
         if camera_pos.0.x < 0. {
-            self.camera.target.x = self.width / 2.;
-            self.speed.x = -self.speed.x
+            self.camera.target.x = self.width / 2.
         }
         
         if camera_pos.0.y < 0. {
-            self.camera.target.y = self.height / 2.;
-            self.speed.y = -self.speed.y
+            self.camera.target.y = self.height / 2.
         }
 
         if camera_pos.1.x > max_x {
-            self.camera.target.x = max_x - self.width / 2.;
-            self.speed.x = -self.speed.x
+            self.camera.target.x = max_x - self.width / 2.
         }
         
         if camera_pos.1.y > max_y {
-            self.camera.target.y = max_y - self.height / 2.;
-            self.speed.y = -self.speed.y
+            self.camera.target.y = max_y - self.height / 2.
         }
     }
 }
