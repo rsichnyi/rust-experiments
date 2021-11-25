@@ -1,0 +1,17 @@
+[package]
+name = "idlep"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+macroquad = "0.3"
+macroquad-tiled = "0.1.1"
+macroquad-platformer = "0.1.2"
+
+[profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
