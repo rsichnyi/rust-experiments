@@ -1,0 +1,100 @@
+on:
+  push:
+    tags:
+    - 'v*'
+
+name: Release
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: 'x86_64-unknown-linux-gnu', artifact: 'idlep' }
+          - { os: ubuntu-latest, target: 'wasm32-unknown-unknown', artifact: 'idlep.wasm' }
+          - { os: windows-latest, target: 'x86_64-pc-windows-msvc', artifact: 'idlep.exe' }
+          - { os: macos-latest, target: 'x86_64-apple-darwin', artifact: 'idlep' }
+        include:
+          - os: ubuntu-latest
+            packages: libx11-dev libxi-dev libgl1-mesa-dev gcc-mingw-w64 libasound2-dev
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get -yq --no-install-suggests --no-install-recommends install ${{ matrix.packages }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.config.target }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --bins --target=${{ matrix.config.target }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.config.target }}
+          path: target/${{ matrix.config.target }}/release/${{ matrix.config.artifact }}
+          retention-days: 1
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+        with:
+          path: assets
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Upload binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: assets/x86_64-unknown-linux-gnu/idlep
+          asset_name: idlep
+          asset_content_type: 'application/octet-stream'
+      - name: Upload .wasm
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: assets/wasm32-unknown-unknown/idlep.wasm
+          asset_name: idlep.wasm
+          asset_content_type: 'application/wasm'
+      - name: Upload .exe
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: assets/x86_64-pc-windows-msvc/idlep.exe
+          asset_name: idlep.exe
+          asset_content_type: 'application/vnd.microsoft.portable-executable'
+      - name: Upload .app
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: assets/x86_64-apple-darwin/idlep
+          asset_name: idlep-macos
+          asset_content_type: 'application/octet-stream'

@@ -171,6 +171,8 @@ async fn main() {
 
         clear_background(BLACK);
 
+        draw_text_ex("Use arrows to move camera", 100.0, 40.0, TextParams::default());
+
         world.update();
 
         next_frame().await
