@@ -20,11 +20,11 @@ pub struct Tile {
 }
 
 impl Tile {
-    pub fn new(x: u16, y: u16) -> Tile {
+    pub fn new(x: u16, y: u16, color: Color) -> Tile {
         let width = TILE_SIZE;
         let height = TILE_SIZE;
 
-        let image = Image::gen_image_color(width, height, LIGHTGRAY);
+        let image = Image::gen_image_color(width, height, color);
         Tile {
             texture: Texture2D::from_image(&image),
             rect: Rect::new(x.into(), y.into(), width.into(), height.into())
@@ -59,26 +59,21 @@ impl Player {
         draw_texture(self.texture, self.rect.x + 2., self.rect.y + 2., WHITE);
     }
 
-    pub fn update(&mut self, boundaries: Rect) {
-        self.rect.move_to(self.rect.point() + self.speed);
+    pub fn process_input(&mut self) {
+        let player_speed = 4.;
 
-        if self.rect.left() < boundaries.left() {
-            self.rect.x = boundaries.left()
+        if is_key_down(KeyCode::Right) {
+            self.speed.x = player_speed
         }
-
-        if self.rect.top() < boundaries.top() {
-            self.rect.y = boundaries.top()
+        if is_key_down(KeyCode::Left) {
+            self.speed.x = -player_speed
         }
-
-        if self.rect.right() > boundaries.right() {
-            self.rect.x = boundaries.right() - self.rect.w
+        if is_key_down(KeyCode::Down) {
+            self.speed.y = player_speed
         }
-
-        if self.rect.bottom() > boundaries.bottom() {
-            self.rect.y = boundaries.bottom() - self.rect.h
+        if is_key_down(KeyCode::Up) {
+            self.speed.y = -player_speed
         }
-
-        self.speed = vec2(0., 0.);
     }
 }
 
@@ -145,6 +140,13 @@ pub struct World {
     boundaries: Rect
 }
 
+pub fn is_overlaped(rect1: &Rect, rect2: &Rect) -> bool {
+    rect1.left() < rect2.right()
+        && rect1.right() > rect2.left()
+        && rect1.top() < rect2.bottom()
+        && rect1.bottom() > rect2.top()
+}
+
 impl World {
     pub fn new(map_data: Vec<Vec<i32>>) -> World {
         let mut tiles = vec![];
@@ -153,7 +155,7 @@ impl World {
         for (row_idx, l) in map_data.iter().enumerate() {
             for (col_idx, x) in l.iter().enumerate() {
                 if *x == 1 {
-                    tiles.push(Tile::new(col_idx as u16 * TILE_SIZE, row_idx as u16 * TILE_SIZE));
+                    tiles.push(Tile::new(col_idx as u16 * TILE_SIZE, row_idx as u16 * TILE_SIZE, LIGHTGRAY));
                 }
                 if *x == 2 {
                     player.rect.x = (col_idx as u16 * TILE_SIZE).into();
@@ -184,21 +186,66 @@ impl World {
     }
 
     pub fn update_player(&mut self) {
-        let player_speed = 4.;
+        self.player.process_input();
 
-        if is_key_down(KeyCode::Right) {
-            self.player.speed.x = player_speed
+        // splitting vertical/horizontal movement here
+        // we need to know of player is to the right/left of the tile or to the bottom/top
+        // can not determine that if we apply both movements at the same time (or can we?)
+
+        // vertical movement
+        if self.player.speed.y != 0. {
+            self.player.rect.y += self.player.speed.y;
+
+            if self.player.rect.top() < self.boundaries.top() {
+                self.player.rect.y = self.boundaries.top()
+            }
+
+            if self.player.rect.bottom() > self.boundaries.bottom() {
+                self.player.rect.y = self.boundaries.bottom() - self.player.rect.h
+            }
+
+            for tile in self.tiles.iter() {
+                if is_overlaped(&self.player.rect, &tile.rect) {
+                    if self.player.speed.y > 0. {
+                        // we were moving down and actually moved inside the other tile, place player on top of the tile
+                        self.player.rect.y = tile.rect.top() - self.player.rect.h
+                    }
+                    if self.player.speed.y < 0. {
+                        // moving up, place player below the tile
+                        self.player.rect.y = tile.rect.bottom()
+                    }
+                }
+            }
         }
-        if is_key_down(KeyCode::Left) {
-            self.player.speed.x = -player_speed
+
+        // horizontal movement
+        if self.player.speed.x != 0. {
+            self.player.rect.x += self.player.speed.x;
+
+            if self.player.rect.left() < self.boundaries.left() {
+                self.player.rect.x = self.boundaries.left()
+            }
+
+            if self.player.rect.right() > self.boundaries.right() {
+                self.player.rect.x = self.boundaries.right() - self.player.rect.w
+            }
+
+            for tile in self.tiles.iter() {
+                if is_overlaped(&self.player.rect, &tile.rect) {
+                    if self.player.speed.x > 0. {
+                        // moving right, place the player on the left of tile
+                        self.player.rect.x = tile.rect.left() - self.player.rect.w
+                    }
+                    if self.player.speed.x < 0. {
+                        // moving left, place the player on the right of tile
+                        self.player.rect.x = tile.rect.right()
+                    }
+                }
+            }
         }
-        if is_key_down(KeyCode::Down) {
-            self.player.speed.y = player_speed
-        }
-        if is_key_down(KeyCode::Up) {
-            self.player.speed.y = -player_speed
-        }
-        self.player.update(self.boundaries);
+
+        // reset the speed since it's reapplied on the next frame
+        self.player.speed = vec2(0., 0.);
 
         self.player.draw();
     }
@@ -232,14 +279,14 @@ async fn main() {
         vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         vec![0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        vec![1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0],
         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        vec![0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0],
         vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
