@@ -1,8 +1,10 @@
 //#![windows_subsystem = "windows"]
 
+use std::collections::HashMap;
 use macroquad::prelude::*;
 
-const TILE_SIZE: u16 = 64;
+const TILE_SIZE: u16 = 32;
+const TILE_SIZE_FLOAT: f32 = TILE_SIZE as f32;
 
 fn window_conf() -> Conf {
     Conf {
@@ -20,14 +22,11 @@ pub struct Tile {
 }
 
 impl Tile {
-    pub fn new(x: u16, y: u16, color: Color) -> Tile {
-        let width = TILE_SIZE;
-        let height = TILE_SIZE;
-
-        let image = Image::gen_image_color(width, height, color);
+    pub fn new(x: f32, y: f32, color: Color) -> Tile {
+        let image = Image::gen_image_color(TILE_SIZE, TILE_SIZE, color);
         Tile {
             texture: Texture2D::from_image(&image),
-            rect: Rect::new(x.into(), y.into(), width.into(), height.into())
+            rect: Rect::new(x, y, TILE_SIZE_FLOAT, TILE_SIZE_FLOAT)
         }
     }
 
@@ -36,31 +35,118 @@ impl Tile {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum PlayerAnimation {
+    Idle,
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight
+}
+
 pub struct Player {
-    pub texture: Texture2D,
+    texture: Texture2D,
     pub rect: Rect,
-    pub speed: Vec2
+    pub speed: Vec2,
+    animations: HashMap<PlayerAnimation, Vec<Texture2D>>,
+    animation: PlayerAnimation,
+    animation_frame: f32,
 }
 
 impl Player {
-    pub fn new(x: u16, y: u16) -> Player {
-        let width = TILE_SIZE;
-        let height = TILE_SIZE;
+    pub async fn new(x: f32, y: f32) -> Player {
 
-        let image = Image::gen_image_color(width - 4, height - 4, RED);
+        let mut animations = HashMap::new();
+        animations.insert(PlayerAnimation::Idle, vec![
+            load_texture("assets/knight/move_down/0.png").await.unwrap()
+        ]);
+        animations.insert(PlayerAnimation::MoveUp, vec![
+            load_texture("assets/knight/move_up/0.png").await.unwrap(),
+            load_texture("assets/knight/move_up/1.png").await.unwrap(),
+            load_texture("assets/knight/move_up/2.png").await.unwrap(),
+            load_texture("assets/knight/move_up/3.png").await.unwrap(),
+            load_texture("assets/knight/move_up/4.png").await.unwrap(),
+            load_texture("assets/knight/move_up/5.png").await.unwrap(),
+            load_texture("assets/knight/move_up/6.png").await.unwrap(),
+            load_texture("assets/knight/move_up/7.png").await.unwrap(),
+            load_texture("assets/knight/move_up/8.png").await.unwrap()
+        ]);
+        animations.insert(PlayerAnimation::MoveDown, vec![
+            load_texture("assets/knight/move_down/0.png").await.unwrap(),
+            load_texture("assets/knight/move_down/1.png").await.unwrap(),
+            load_texture("assets/knight/move_down/2.png").await.unwrap(),
+            load_texture("assets/knight/move_down/3.png").await.unwrap(),
+            load_texture("assets/knight/move_down/4.png").await.unwrap(),
+            load_texture("assets/knight/move_down/5.png").await.unwrap(),
+            load_texture("assets/knight/move_down/6.png").await.unwrap(),
+            load_texture("assets/knight/move_down/7.png").await.unwrap(),
+            load_texture("assets/knight/move_down/8.png").await.unwrap()
+        ]);
+        animations.insert(PlayerAnimation::MoveLeft, vec![
+            load_texture("assets/knight/move_left/0.png").await.unwrap(),
+            load_texture("assets/knight/move_left/1.png").await.unwrap(),
+            load_texture("assets/knight/move_left/2.png").await.unwrap(),
+            load_texture("assets/knight/move_left/3.png").await.unwrap(),
+            load_texture("assets/knight/move_left/4.png").await.unwrap(),
+            load_texture("assets/knight/move_left/5.png").await.unwrap(),
+            load_texture("assets/knight/move_left/6.png").await.unwrap(),
+            load_texture("assets/knight/move_left/7.png").await.unwrap(),
+            load_texture("assets/knight/move_left/8.png").await.unwrap()
+        ]);
+        animations.insert(PlayerAnimation::MoveRight, vec![
+            load_texture("assets/knight/move_right/0.png").await.unwrap(),
+            load_texture("assets/knight/move_right/1.png").await.unwrap(),
+            load_texture("assets/knight/move_right/2.png").await.unwrap(),
+            load_texture("assets/knight/move_right/3.png").await.unwrap(),
+            load_texture("assets/knight/move_right/4.png").await.unwrap(),
+            load_texture("assets/knight/move_right/5.png").await.unwrap(),
+            load_texture("assets/knight/move_right/6.png").await.unwrap(),
+            load_texture("assets/knight/move_right/7.png").await.unwrap(),
+            load_texture("assets/knight/move_right/8.png").await.unwrap()
+        ]);
+
         Player {
-            texture: Texture2D::from_image(&image),
-            rect: Rect::new(x.into(), y.into(), width.into(), height.into()),
+            texture: animations.get(&PlayerAnimation::Idle).unwrap()[0],
+            animations,
+            rect: Rect::new(x.into(), y.into(), TILE_SIZE_FLOAT, TILE_SIZE_FLOAT),
             ..Default::default()
         }
     }
 
+    pub fn animate(&mut self) {
+
+        let mut animation = PlayerAnimation::Idle;
+
+        if self.speed.x > 0. {
+            animation = PlayerAnimation::MoveRight;
+        } else if self.speed.x < 0. {
+            animation = PlayerAnimation::MoveLeft;
+        } else if self.speed.y > 0. {
+            animation = PlayerAnimation::MoveDown;
+        } else if self.speed.y < 0. {
+            animation = PlayerAnimation::MoveUp;
+        }
+
+        if animation != self.animation {
+            self.animation = animation;
+            self.animation_frame = 0.;
+        }
+
+        let animation_frames = self.animations.get(&self.animation).unwrap();
+
+        self.animation_frame += 0.08;
+        if self.animation_frame >= animation_frames.len() as f32 {
+            self.animation_frame = 0.;
+        }
+        self.texture = animation_frames[(self.animation_frame as usize)];
+    }
+
     pub fn draw(&self) {
-        draw_texture(self.texture, self.rect.x + 2., self.rect.y + 2., WHITE);
+        draw_texture(self.texture, self.rect.x - 8., self.rect.y - 16., WHITE);
     }
 
     pub fn process_input(&mut self) {
-        let player_speed = 4.;
+        let player_speed = 1.;
 
         if is_key_down(KeyCode::Right) {
             self.speed.x = player_speed
@@ -75,6 +161,11 @@ impl Player {
             self.speed.y = -player_speed
         }
     }
+
+    pub fn update(&mut self){
+        self.process_input();
+        self.animate();
+    }
 }
 
 impl Default for Player {
@@ -82,7 +173,10 @@ impl Default for Player {
         Player {
             texture: Texture2D::empty(),
             rect: Rect::new(0., 0., 0., 0.),
-            speed: vec2(0., 0.)
+            speed: vec2(0., 0.),
+            animations: HashMap::new(),
+            animation: PlayerAnimation::Idle,
+            animation_frame: 0.,
         }
     }
 }
@@ -134,7 +228,7 @@ impl PlayerCamera {
 }
 
 pub struct World {
-    pub tiles: Vec<Tile>,
+    tiles: Vec<Tile>,
     player: Player,
     player_camera: PlayerCamera,
     boundaries: Rect
@@ -148,18 +242,18 @@ pub fn is_overlaped(rect1: &Rect, rect2: &Rect) -> bool {
 }
 
 impl World {
-    pub fn new(map_data: Vec<Vec<i32>>) -> World {
+    pub async fn new(map_data: Vec<Vec<i32>>) -> World {
         let mut tiles = vec![];
-        let mut player = Player::new(0, 0);
+        let mut player = Player::new(0., 0.).await;
 
         for (row_idx, l) in map_data.iter().enumerate() {
             for (col_idx, x) in l.iter().enumerate() {
                 if *x == 1 {
-                    tiles.push(Tile::new(col_idx as u16 * TILE_SIZE, row_idx as u16 * TILE_SIZE, LIGHTGRAY));
+                    tiles.push(Tile::new(col_idx as f32 * TILE_SIZE_FLOAT, row_idx as f32 * TILE_SIZE_FLOAT, LIGHTGRAY));
                 }
                 if *x == 2 {
-                    player.rect.x = (col_idx as u16 * TILE_SIZE).into();
-                    player.rect.y = (row_idx as u16 * TILE_SIZE).into();
+                    player.rect.x = col_idx as f32 * TILE_SIZE_FLOAT;
+                    player.rect.y = row_idx as f32 * TILE_SIZE_FLOAT;
                 }
             }
         }
@@ -169,11 +263,11 @@ impl World {
             boundaries: Rect::new(
                 0.,
                 0.,
-                (map_data[0].len() as u16 * TILE_SIZE) as f32,
-                (map_data.len() as u16 * TILE_SIZE) as f32
+                map_data[0].len() as f32 * TILE_SIZE_FLOAT,
+                map_data.len() as f32 * TILE_SIZE_FLOAT
             ),
             player,
-            player_camera: PlayerCamera::new(1280., 720.)
+            player_camera: PlayerCamera::new(TILE_SIZE_FLOAT * 20., TILE_SIZE_FLOAT * 11.25)
         }
     }
 
@@ -186,7 +280,7 @@ impl World {
     }
 
     pub fn update_player(&mut self) {
-        self.player.process_input();
+        self.player.update();
 
         // splitting vertical/horizontal movement here
         // we need to know of player is to the right/left of the tile or to the bottom/top
@@ -260,10 +354,10 @@ impl World {
             target.y - self.player_camera.camera.target.y
         );
 
-        if offset.length() < 1. / 16. {
+        if offset.length() < 1. / (TILE_SIZE_FLOAT / 4.) {
             self.player_camera.camera.target = target
         } else {
-            self.player_camera.speed = offset / 32.;
+            self.player_camera.speed = offset / (TILE_SIZE_FLOAT / 2.);
         }
 
         self.player_camera.update(self.boundaries);
@@ -276,29 +370,29 @@ impl World {
 async fn main() {
 
     let level_map = vec![
+        vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0],
-        vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     ];
 
-    let mut world = World::new(level_map);
+    let mut world = World::new(level_map).await;
 
     loop {
 
         clear_background(BLACK);
 
-        draw_text_ex("Use arrows to move player", 100.0, 40.0, TextParams::default());
+        draw_text_ex("Use arrows to move player", TILE_SIZE_FLOAT * 2., TILE_SIZE_FLOAT * 1.5, TextParams::default());
 
         world.update();
 

@@ -55,6 +55,9 @@ jobs:
         with:
           name: wasm_bin
           path: pages
+      - name: Copy assets
+        run: |
+          cp -r assets pages/
       - name: Deploy pages
         uses: JamesIves/github-pages-deploy-action@4.1.6
         with:
